@@ -1,0 +1,210 @@
+name: Deploy Game
+
+on:
+  push:
+    branches:
+      - main
+env:
+  BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  IS_MAIN: ${{contains(github.ref, 'main')}}
+  DISCORD_WEBHOOK: ${{secrets.DISCORD_WEBHOOK}}
+  PROJECT_NAME: "Skel"
+  ITCH_PROJECT_NAME: "skel"
+  ITCH_USERNAME: "username"
+  GODOT_VERSION: "3.4.4"
+  RELEASE_LINUX: true
+  RELEASE_WINDOWS: true
+  RELEASE_MAC: true
+  RELEASE_HTML5: true
+
+jobs:
+  BuildAndPublish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Make Exports Folder
+        run: |
+          mkdir exports
+      - name: Read Version Number
+        id: versioning
+        uses: paulhatch/semantic-version@v4.0.2
+        with:
+          # The prefix to use to identify tags
+          tag_prefix: "v"
+          # A string which, if present in a git commit, indicates that a change represents a
+          # major (breaking) change, supports regular expressions wrapped with '/'
+          major_pattern: "(MAJOR)"
+          # Same as above except indicating a minor change, supports regular expressions wrapped with '/'
+          minor_pattern: "(MINOR)"
+          # A string to determine the format of the version output
+          format: "${major}.${minor}.${patch}"
+          # If this is set to true, *every* commit will be treated as a new version.
+          bump_each_commit: true
+          # If true, the body of commits will also be searched for major/minor patterns to determine the version type.
+          search_commit_body: false
+          # The output method used to generate list of users, 'csv' or 'json'.
+          user_format_type: "csv"
+      - name: Add Version Number to Exports
+        run: |
+          echo -n ${{ steps.versioning.outputs.version }} > ./VERSION
+      - name: Publish Version Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: version
+          path: ./VERSION
+      - name: Download + Authorize Godot
+        run: |
+          curl -L -o godot.zip https://downloads.tuxfamily.org/godotengine/${GODOT_VERSION}/Godot_v${GODOT_VERSION}-stable_linux_headless.64.zip
+          unzip godot.zip
+          mv Godot_v${GODOT_VERSION}-stable_linux_headless.64 godot
+          ls
+          chmod +x godot
+      - name: Download Export Templates
+        run: |
+          curl -L -o export_templates.zip https://downloads.tuxfamily.org/godotengine/${GODOT_VERSION}/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
+          unzip export_templates.zip
+      - name: Install Export Templates
+        run: |
+          mkdir -p ~/.local/share/godot/templates/${GODOT_VERSION}.stable
+          mv ./templates/* ~/.local/share/godot/templates/${GODOT_VERSION}.stable
+      - name: Export Windows Port
+        if: ${{ env.RELEASE_WINDOWS == 'true' }}
+        run: |
+          mkdir ./exports/windows
+          ./godot --path ./project.godot --export "Windows" ./exports/windows/$PROJECT_NAME.exe
+      - name: Export Linux Port
+        if: ${{ env.RELEASE_LINUX == 'true' }}
+        run: |
+          mkdir ./exports/linux
+          ./godot --path ./project.godot --export "Linux" ./exports/linux/$PROJECT_NAME.x86_64
+      - name: Export Mac Port
+        if: ${{ env.RELEASE_MAC == 'true' }}
+        run: |
+          mkdir ./exports/mac
+          ./godot --path ./project.godot --export "Mac" ./exports/mac/$PROJECT_NAME.zip
+      - name: Export HTML5 Port
+        if: ${{ env.RELEASE_HTML5 == 'true' }}
+        run: |
+          mkdir ./exports/html
+          ./godot --path ./project.godot --export "HTML5" ./exports/html/index.html
+      - name: Zip Exports
+        run: |
+          cd exports
+          for file in *; do zip -r "${ITCH_PROJECT_NAME}_${file%.*}_${{ steps.versioning.outputs.version }}.zip" $file; rm -rf $file; done
+          cd ..
+      - name: Publish Export Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: exports
+          path: exports
+
+  CreateNewGithubRelease:
+    needs: BuildAndPublish
+    if: ${{ contains(github.ref, 'main') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Download Exports
+        uses: actions/download-artifact@v2
+      - name: Read Version Number
+        id: version_number
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: ./version/VERSION
+      - name: Test Release Variables
+        run: |
+          echo "Version Number $VERSION_NUMBER"
+          echo "Commit Message $COMMIT_MESSAGE"
+          echo "Project Name $PROJECT_NAME"
+        env:
+          VERSION_NUMBER: ${{ steps.version_number.outputs.content }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+      - name: Create New Release
+        uses: actions/create-release@v1
+        id: create_release
+        with:
+          tag_name: ${{ steps.version_number.outputs.content }}
+          release_name: Release ${{ steps.version_number.outputs.content }}
+          body: ${{ github.event.head_commit.message }}
+          draft: false
+          prerelease: false
+      - name: Upload Exports
+        id: upload-release-asset
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version_number.outputs.content }}
+          files: exports/*
+  PushExportsToItch:
+    needs: BuildAndPublish
+    if: ${{ contains(github.ref, 'main') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Exports
+        uses: actions/download-artifact@v2
+      - name: Download + Authorize Butler
+        run: |
+          curl -L -o butler.zip https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default
+          unzip butler.zip
+          chmod +x butler
+          ./butler -V
+      - name: Login To Butler
+        run: ./butler login
+      - name: Read Version Number
+        id: version_number
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: ./version/VERSION
+      - name: Push Windows Export To Itch
+        if: ${{ env.RELEASE_WINDOWS == 'true' }}
+        run: ./butler push ./exports/${ITCH_PROJECT_NAME}_windows_${{ steps.version_number.outputs.content }}.zip $ITCH_USERNAME/$ITCH_PROJECT_NAME:win --userversion-file ./version/VERSION
+      - name: Push Mac Export To Itch
+        if: ${{ env.RELEASE_MAC == 'true' }}
+        run: ./butler push ./exports/${ITCH_PROJECT_NAME}_mac_${{ steps.version_number.outputs.content }}.zip $ITCH_USERNAME/$ITCH_PROJECT_NAME:mac --userversion-file ./version/VERSION
+      - name: Push Linux Export To Itch
+        if: ${{ env.RELEASE_LINUX == 'true' }}
+        run: ./butler push ./exports/${ITCH_PROJECT_NAME}_linux_${{ steps.version_number.outputs.content }}.zip $ITCH_USERNAME/$ITCH_PROJECT_NAME:linux --userversion-file ./version/VERSION
+      - name: Push HTML5 Export To Itch
+        if: ${{ env.RELEASE_HTML5 == 'true' }}
+        run: ./butler push ./exports/${ITCH_PROJECT_NAME}_html_${{ steps.version_number.outputs.content }}.zip $ITCH_USERNAME/$ITCH_PROJECT_NAME:html --userversion-file ./version/VERSION
+  AlertPipelineResult:
+    needs: [BuildAndPublish, CreateNewGithubRelease, PushExportsToItch]
+    if: ${{ always() }}
+    env:
+      DID_PREV_JOBS_SUCCEED: ${{ contains(needs.BuildAndPublish.result, 'success' ) && contains(needs.CreateNewGithubRelease.result, 'success' ) && contains(needs.PushExportsToItch.result, 'success' ) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Version
+        uses: actions/download-artifact@v2
+        with:
+          name: version
+          path: version
+      - name: Read Version Number
+        id: version_number
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: ./version/VERSION
+      - name: Send Discord Success Message
+        if: ${{ env.IS_MAIN && env.DID_PREV_JOBS_SUCCEED == 'true' }}
+        run: |
+          curl --location --request POST $DISCORD_WEBHOOK \
+            --header 'Content-Type: application/json' \
+            --data-raw '{"content": "'"$PROJECT_NAME"' '"$VERSION"' has successfully released and deployed!"}'
+        env:
+          VERSION: ${{ steps.version_number.outputs.content }}
+      - name: Send Discord Failure Message
+        if: ${{ env.IS_MAIN && env.DID_PREV_JOBS_SUCCEED != 'true' }}
+        run: |
+          curl --location --request POST $DISCORD_WEBHOOK \
+            --header 'Content-Type: application/json' \
+            --data-raw '{"content": "'"$PROJECT_NAME"' '"$VERSION"' release and/or deployment has failed!"}'
+        env:
+          VERSION: ${{ steps.version_number.outputs.content }}
