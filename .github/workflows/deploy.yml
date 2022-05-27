@@ -75,17 +75,17 @@ jobs:
         if: ${{ env.RELEASE_WINDOWS == 'true' }}
         run: |
           mkdir ./exports/windows
-          ./godot --path ./project.godot --export "Windows" ./exports/windows/$PROJECT_NAME.exe
+          ./godot --path ./project.godot --export "Windows Desktop" ./exports/windows/$PROJECT_NAME.exe
       - name: Export Linux Port
         if: ${{ env.RELEASE_LINUX == 'true' }}
         run: |
           mkdir ./exports/linux
-          ./godot --path ./project.godot --export "Linux" ./exports/linux/$PROJECT_NAME.x86_64
+          ./godot --path ./project.godot --export "Linux/X11" ./exports/linux/$PROJECT_NAME.x86_64
       - name: Export Mac Port
         if: ${{ env.RELEASE_MAC == 'true' }}
         run: |
           mkdir ./exports/mac
-          ./godot --path ./project.godot --export "Mac" ./exports/mac/$PROJECT_NAME.zip
+          ./godot --path ./project.godot --export "Mac OSX" ./exports/mac/$PROJECT_NAME.zip
       - name: Export HTML5 Port
         if: ${{ env.RELEASE_HTML5 == 'true' }}
         run: |
@@ -104,8 +104,11 @@ jobs:
 
   CreateNewGithubRelease:
     needs: BuildAndPublish
+    permissions: write-all
     if: ${{ contains(github.ref, 'main') }}
     runs-on: ubuntu-latest
+    outputs: 
+      url: ${{ steps.create_release.outputs.html_url }}
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v2
@@ -145,7 +148,8 @@ jobs:
           files: exports/*
   PushExportsToItch:
     needs: BuildAndPublish
-    if: ${{ contains(github.ref, 'main') }}
+    #if: ${{ contains(github.ref, 'main') }}
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - name: Download Exports
@@ -176,10 +180,12 @@ jobs:
         if: ${{ env.RELEASE_HTML5 == 'true' }}
         run: ./butler push ./exports/${ITCH_PROJECT_NAME}_html_${{ steps.version_number.outputs.content }}.zip $ITCH_USERNAME/$ITCH_PROJECT_NAME:html --userversion-file ./version/VERSION
   AlertPipelineResult:
-    needs: [BuildAndPublish, CreateNewGithubRelease, PushExportsToItch]
+    #needs: [BuildAndPublish, CreateNewGithubRelease, PushExportsToItch]
+    needs: [BuildAndPublish, CreateNewGithubRelease]
     if: ${{ always() }}
     env:
-      DID_PREV_JOBS_SUCCEED: ${{ contains(needs.BuildAndPublish.result, 'success' ) && contains(needs.CreateNewGithubRelease.result, 'success' ) && contains(needs.PushExportsToItch.result, 'success' ) }}
+      DID_PREV_JOBS_SUCCEED: ${{ contains(needs.BuildAndPublish.result, 'success' ) && contains(needs.CreateNewGithubRelease.result, 'success' ) }}
+      #DID_PREV_JOBS_SUCCEED: ${{ contains(needs.BuildAndPublish.result, 'success' ) && contains(needs.CreateNewGithubRelease.result, 'success' ) }} && contains(needs.PushExportsToItch.result, 'success' ) }}
     runs-on: ubuntu-latest
     steps:
       - name: Download Version
@@ -197,7 +203,7 @@ jobs:
         run: |
           curl --location --request POST $DISCORD_WEBHOOK \
             --header 'Content-Type: application/json' \
-            --data-raw '{"content": "'"$PROJECT_NAME"' '"$VERSION"' has successfully released and deployed!"}'
+            --data-raw '{"content": "'"$PROJECT_NAME"' '"$VERSION"' has successfully released and deployed! check it out at '"${{ needs.CreateNewGithubRelease.outputs.url }}"'"}'
         env:
           VERSION: ${{ steps.version_number.outputs.content }}
       - name: Send Discord Failure Message
