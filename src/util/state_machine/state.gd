@@ -38,3 +38,9 @@ func _physics_update(delta: float):
 # Called during _input
 func _handle_input(event: InputEvent):
 	return
+
+func goto(state: String):
+	emit_signal("finish", state, null)
+
+func goto_args(state: String, args: Array):
+	emit_signal("finish", state, args)
