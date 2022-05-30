@@ -9,18 +9,22 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   IS_MAIN: ${{contains(github.ref, 'main')}}
   DISCORD_WEBHOOK: ${{secrets.DISCORD_WEBHOOK}}
-  PROJECT_NAME: "Skel"
-  ITCH_PROJECT_NAME: "skel"
-  ITCH_USERNAME: "username"
+  PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
+  ITCH_PROJECT_NAME: ${{ secrets.ITCH_PROJECT_NAME }}
+  ITCH_USERNAME: ${{ secrets.ITCH_USERNAME }}
   GODOT_VERSION: "3.4.4"
   RELEASE_LINUX: true
   RELEASE_WINDOWS: true
   RELEASE_MAC: true
   RELEASE_HTML5: true
+  PUSH_TO_ITCH: true
+  UPLOAD_TO_GH_PAGES: true
 
 jobs:
   BuildAndPublish:
     runs-on: ubuntu-latest
+    outputs: 
+      version: ${{ steps.versioning.outputs.version }}
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v2
@@ -48,14 +52,6 @@ jobs:
           search_commit_body: false
           # The output method used to generate list of users, 'csv' or 'json'.
           user_format_type: "csv"
-      - name: Add Version Number to Exports
-        run: |
-          echo -n ${{ steps.versioning.outputs.version }} > ./VERSION
-      - name: Publish Version Artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: version
-          path: ./VERSION
       - name: Download + Authorize Godot
         run: |
           curl -L -o godot.zip https://downloads.tuxfamily.org/godotengine/${GODOT_VERSION}/Godot_v${GODOT_VERSION}-stable_linux_headless.64.zip
@@ -87,10 +83,20 @@ jobs:
           mkdir ./exports/mac
           ./godot --path ./project.godot --export "Mac OSX" ./exports/mac/$PROJECT_NAME.zip
       - name: Export HTML5 Port
-        if: ${{ env.RELEASE_HTML5 == 'true' }}
+        if: ${{ env.RELEASE_HTML5 == 'true' || env.UPLOAD_TO_GH_PAGES == 'true' }}
         run: |
           mkdir ./exports/html
           ./godot --path ./project.godot --export "HTML5" ./exports/html/index.html
+      - name: Publish HTML5 Artifact for Github Pages
+        uses: actions/upload-artifact@v2
+        if: ${{ env.UPLOAD_TO_GH_PAGES == 'true' }}
+        with:
+          name: gh-pages
+          path: exports/html
+      - name: Delete HTML5 export if it's not to be uploaded
+        if: ${{ env.RELEASE_HTML5 == 'false' && env.UPLOAD_TO_GH_PAGES == 'true' }}
+        run: |
+          rm -rf .exports/html
       - name: Zip Exports
         run: |
           cd exports
@@ -109,6 +115,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs: 
       url: ${{ steps.create_release.outputs.html_url }}
+    env:
+      VERSION: ${{ needs.BuildAndPublish.outputs.version }}
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v2
@@ -116,25 +124,19 @@ jobs:
           fetch-depth: 0
       - name: Download Exports
         uses: actions/download-artifact@v2
-      - name: Read Version Number
-        id: version_number
-        uses: juliangruber/read-file-action@v1
-        with:
-          path: ./version/VERSION
       - name: Test Release Variables
         run: |
-          echo "Version Number $VERSION_NUMBER"
+          echo "Version Number $VERSION"
           echo "Commit Message $COMMIT_MESSAGE"
           echo "Project Name $PROJECT_NAME"
         env:
-          VERSION_NUMBER: ${{ steps.version_number.outputs.content }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
       - name: Create New Release
         uses: actions/create-release@v1
         id: create_release
         with:
-          tag_name: ${{ steps.version_number.outputs.content }}
-          release_name: Release ${{ steps.version_number.outputs.content }}
+          tag_name: ${{ env.VERSION }}
+          release_name: Release ${{ env.VERSION }}
           body: ${{ github.event.head_commit.message }}
           draft: false
           prerelease: false
@@ -144,13 +146,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.version_number.outputs.content }}
+          tag_name: ${{ env.VERSION }}
           files: exports/*
   PushExportsToItch:
     needs: BuildAndPublish
-    #if: ${{ contains(github.ref, 'main') }}
-    if: ${{ false }}
+    if: ${{ contains(github.ref, 'main') }}
+    #if: ${{ false }}
     runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.BuildAndPublish.outputs.version }}
     steps:
       - name: Download Exports
         uses: actions/download-artifact@v2
@@ -162,55 +166,81 @@ jobs:
           ./butler -V
       - name: Login To Butler
         run: ./butler login
-      - name: Read Version Number
-        id: version_number
-        uses: juliangruber/read-file-action@v1
-        with:
-          path: ./version/VERSION
       - name: Push Windows Export To Itch
         if: ${{ env.RELEASE_WINDOWS == 'true' }}
-        run: ./butler push ./exports/${ITCH_PROJECT_NAME}_windows_${{ steps.version_number.outputs.content }}.zip $ITCH_USERNAME/$ITCH_PROJECT_NAME:win --userversion-file ./version/VERSION
+        run: ./butler push ./exports/${ITCH_PROJECT_NAME}_windows_${VERSION}.zip $ITCH_USERNAME/$ITCH_PROJECT_NAME:win --userversion $VERSION
       - name: Push Mac Export To Itch
         if: ${{ env.RELEASE_MAC == 'true' }}
-        run: ./butler push ./exports/${ITCH_PROJECT_NAME}_mac_${{ steps.version_number.outputs.content }}.zip $ITCH_USERNAME/$ITCH_PROJECT_NAME:mac --userversion-file ./version/VERSION
+        run: ./butler push ./exports/${ITCH_PROJECT_NAME}_mac_${VERSION}.zip $ITCH_USERNAME/$ITCH_PROJECT_NAME:mac --userversion $VERSION
       - name: Push Linux Export To Itch
         if: ${{ env.RELEASE_LINUX == 'true' }}
-        run: ./butler push ./exports/${ITCH_PROJECT_NAME}_linux_${{ steps.version_number.outputs.content }}.zip $ITCH_USERNAME/$ITCH_PROJECT_NAME:linux --userversion-file ./version/VERSION
+        run: ./butler push ./exports/${ITCH_PROJECT_NAME}_linux_${VERSION}.zip $ITCH_USERNAME/$ITCH_PROJECT_NAME:linux --userversion $VERSION
       - name: Push HTML5 Export To Itch
         if: ${{ env.RELEASE_HTML5 == 'true' }}
-        run: ./butler push ./exports/${ITCH_PROJECT_NAME}_html_${{ steps.version_number.outputs.content }}.zip $ITCH_USERNAME/$ITCH_PROJECT_NAME:html --userversion-file ./version/VERSION
-  AlertPipelineResult:
-    #needs: [BuildAndPublish, CreateNewGithubRelease, PushExportsToItch]
-    needs: [BuildAndPublish, CreateNewGithubRelease]
-    if: ${{ always() }}
-    env:
-      DID_PREV_JOBS_SUCCEED: ${{ contains(needs.BuildAndPublish.result, 'success' ) && contains(needs.CreateNewGithubRelease.result, 'success' ) }}
-      #DID_PREV_JOBS_SUCCEED: ${{ contains(needs.BuildAndPublish.result, 'success' ) && contains(needs.CreateNewGithubRelease.result, 'success' ) }} && contains(needs.PushExportsToItch.result, 'success' ) }}
+        run: ./butler push ./exports/${ITCH_PROJECT_NAME}_html_${VERSION}.zip $ITCH_USERNAME/$ITCH_PROJECT_NAME:html --userversion $VERSION
+  UploadToGithubPages:
+    needs: BuildAndPublish
+    permissions: write-all
+    if: ${{ contains(github.ref, 'main') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Download Version
+      - name: Download HTML5 Export
+        if: ${{ env.UPLOAD_TO_GH_PAGES == 'true' }}
         uses: actions/download-artifact@v2
         with:
-          name: version
-          path: version
-      - name: Read Version Number
-        id: version_number
-        uses: juliangruber/read-file-action@v1
+          name: gh-pages
+          path: gh-pages
+      - name: Deploy
+        if: ${{ env.UPLOAD_TO_GH_PAGES == 'true' }}
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          path: ./version/VERSION
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./gh-pages
+  AlertPipelineResult:
+    needs: [BuildAndPublish, CreateNewGithubRelease, PushExportsToItch]
+    #needs: [BuildAndPublish, CreateNewGithubRelease]
+    if: ${{ always() }}
+    env:
+      #DID_PREV_JOBS_SUCCEED: ${{ contains(needs.BuildAndPublish.result, 'success' ) && contains(needs.CreateNewGithubRelease.result, 'success' ) }}
+      DID_PREV_JOBS_SUCCEED: ${{ contains(needs.BuildAndPublish.result, 'success' ) && contains(needs.CreateNewGithubRelease.result, 'success' ) && contains(needs.PushExportsToItch.result, 'success' ) }}
+      VERSION: ${{ needs.BuildAndPublish.outputs.version }}
+      COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+      RELEASE_URL: ${{ needs.CreateNewGithubRelease.outputs.url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set Itch URL
+        if: ${{ env.PUSH_TO_ITCH == 'true' }}
+        id: itch
+        run: |
+          ITCH_LINK="\n[Play it on Itch!](https://${ITCH_USERNAME}.itch.io/${ITCH_PROJECT_NAME})\n"
+          echo "::set-output name=url::$ITCH_LINK"
+      - name: Set Github Pages URL
+        if: ${{ env.UPLOAD_TO_GH_PAGES == 'true' }}
+        id: ghp
+        run: |
+          #transform "owner/repo" -> "repo"
+          REPO_NAME=$(echo "$GITHUB_REPOSITORY" | cut -d/ -f2)
+          GH_PAGES_LINK="https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}"
+          echo "::set-output name=url::$GH_PAGES_LINK"
       - name: Send Discord Success Message
         if: ${{ env.IS_MAIN && env.DID_PREV_JOBS_SUCCEED == 'true' }}
+        env:
+          GH_PAGES_LINK: ${{ steps.ghp.outputs.url }}
+          ITCH_LINK: ${{ steps.itch.outputs.url }}
         run: |
+          sudo apt install -y jq
+          #escape line breaks
+          ESCAPED_COMMIT_MESSAGE="$(echo -n "$COMMIT_MESSAGE" | jq -Rsa)"
+          MESSAGE='{"content": "'"$PROJECT_NAME"' v'"$VERSION"' has successfully [released]('"${RELEASE_URL}"') and [deployed]('"${GH_PAGES_LINK}"')!\nCommit message: '"${ESCAPED_COMMIT_MESSAGE:1:-1}${ITCH_LINK}"'"}'
+          echo "attempting to send message with body:"
+          echo "$MESSAGE"
           curl --location --request POST $DISCORD_WEBHOOK \
             --header 'Content-Type: application/json' \
-            --data-raw '{"content": "'"$PROJECT_NAME"' '"$VERSION"' has successfully released and deployed! check it out at '"${{ needs.CreateNewGithubRelease.outputs.url }}"'"}'
-        env:
-          VERSION: ${{ steps.version_number.outputs.content }}
+            --data-raw "$MESSAGE"
+
       - name: Send Discord Failure Message
         if: ${{ env.IS_MAIN && env.DID_PREV_JOBS_SUCCEED != 'true' }}
         run: |
           curl --location --request POST $DISCORD_WEBHOOK \
             --header 'Content-Type: application/json' \
             --data-raw '{"content": "'"$PROJECT_NAME"' '"$VERSION"' release and/or deployment has failed!"}'
-        env:
-          VERSION: ${{ steps.version_number.outputs.content }}
