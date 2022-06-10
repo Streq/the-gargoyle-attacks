@@ -1,3 +1,61 @@
-[gd_scene format=2]
+[gd_scene load_steps=8 format=2]
 
-[node name="Node" type="Node"]
+[ext_resource path="res://src/entity/gargoyle.tscn" type="PackedScene" id=1]
+
+[sub_resource type="RectangleShape2D" id=5]
+extents = Vector2( 1352, 10 )
+
+[sub_resource type="RectangleShape2D" id=6]
+extents = Vector2( 31, 249.5 )
+
+[sub_resource type="RectangleShape2D" id=7]
+extents = Vector2( 72, 314 )
+
+[sub_resource type="RectangleShape2D" id=9]
+extents = Vector2( 611, 236.062 )
+
+[sub_resource type="RectangleShape2D" id=10]
+extents = Vector2( 70.5, 416.531 )
+
+[sub_resource type="RectangleShape2D" id=8]
+extents = Vector2( 31, 303 )
+
+[node name="Node2D" type="Node2D"]
+position = Vector2( -256, -301 )
+
+[node name="KinematicBody2D" parent="." instance=ExtResource( 1 )]
+position = Vector2( 270, 345 )
+
+[node name="StaticBody2D" type="StaticBody2D" parent="."]
+position = Vector2( 512, 600 )
+scale = Vector2( 0.5, 0.5 )
+collision_layer = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="StaticBody2D"]
+shape = SubResource( 5 )
+
+[node name="StaticBody2D2" type="StaticBody2D" parent="."]
+position = Vector2( 512, 600 )
+scale = Vector2( 0.5, 0.5 )
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="StaticBody2D2"]
+position = Vector2( -481, -239.5 )
+shape = SubResource( 6 )
+
+[node name="CollisionShape2D2" type="CollisionShape2D" parent="StaticBody2D2"]
+position = Vector2( -440, -878 )
+shape = SubResource( 7 )
+
+[node name="CollisionShape2D4" type="CollisionShape2D" parent="StaticBody2D2"]
+position = Vector2( 76, -994.062 )
+shape = SubResource( 9 )
+
+[node name="CollisionShape2D5" type="CollisionShape2D" parent="StaticBody2D2"]
+position = Vector2( 583, -406 )
+shape = SubResource( 10 )
+
+[node name="CollisionShape2D3" type="CollisionShape2D" parent="StaticBody2D2"]
+position = Vector2( -543, -293 )
+shape = SubResource( 8 )

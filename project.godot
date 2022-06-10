@@ -74,8 +74,24 @@ _global_script_class_icons={
 
 [application]
 
-config/name="skel"
+config/name="TheGargoyleAttacks"
+run/main_scene="res://src/main.tscn"
 config/icon="res://assets/texture/icon.png"
+
+[display]
+
+window/size/width=512
+window/size/height=300
+window/size/test_width=1024
+window/size/test_height=600
+window/stretch/mode="viewport"
+window/stretch/aspect="keep"
+
+[importer_defaults]
+
+texture={
+"flags/filter": false
+}
 
 [physics]
 
@@ -84,6 +100,7 @@ common/enable_pause_aware_picking=true
 [rendering]
 
 quality/driver/driver_name="GLES2"
+2d/snapping/use_gpu_pixel_snap=true
 vram_compression/import_etc=true
 vram_compression/import_etc2=false
 environment/default_environment="res://default_env.tres"
