@@ -1,6 +1,12 @@
-[gd_scene load_steps=8 format=2]
+[gd_scene load_steps=16 format=2]
 
 [ext_resource path="res://src/entity/gargoyle.tscn" type="PackedScene" id=1]
+[ext_resource path="res://src/entity/person.tscn" type="PackedScene" id=2]
+[ext_resource path="res://src/goal_area.gd" type="Script" id=3]
+[ext_resource path="res://assets/texture/map.png" type="Texture" id=4]
+[ext_resource path="res://src/entity/bowman.tscn" type="PackedScene" id=5]
+[ext_resource path="res://src/spawner.gd" type="Script" id=6]
+[ext_resource path="res://src/killzone.gd" type="Script" id=7]
 
 [sub_resource type="RectangleShape2D" id=5]
 extents = Vector2( 1352, 10 )
@@ -19,6 +25,11 @@ extents = Vector2( 70.5, 416.531 )
 
 [sub_resource type="RectangleShape2D" id=8]
 extents = Vector2( 31, 303 )
+
+[sub_resource type="RectangleShape2D" id=11]
+extents = Vector2( 15.5, 6.5 )
+
+[sub_resource type="RectangleShape2D" id=12]
 
 [node name="Node2D" type="Node2D"]
 position = Vector2( -256, -301 )
@@ -59,3 +70,80 @@ shape = SubResource( 10 )
 [node name="CollisionShape2D3" type="CollisionShape2D" parent="StaticBody2D2"]
 position = Vector2( -543, -293 )
 shape = SubResource( 8 )
+
+[node name="person" parent="." instance=ExtResource( 2 )]
+position = Vector2( 293, 591 )
+
+[node name="goal_area" type="Area2D" parent="."]
+position = Vector2( 269, 353 )
+collision_layer = 0
+collision_mask = 8
+script = ExtResource( 3 )
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="goal_area"]
+position = Vector2( 2.5, -3.5 )
+shape = SubResource( 11 )
+
+[node name="Sprite" type="Sprite" parent="."]
+position = Vector2( 512, 451 )
+z_index = -2
+texture = ExtResource( 4 )
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="Label" type="Label" parent="CanvasLayer" groups=["score"]]
+margin_right = 40.0
+margin_bottom = 31.0
+text = "score:
+"
+
+[node name="Position2D" type="Position2D" parent="."]
+position = Vector2( 856, 588 )
+script = ExtResource( 6 )
+BOWMAN = ExtResource( 5 )
+PERSON = ExtResource( 2 )
+dir = -1.0
+
+[node name="Timer" type="Timer" parent="Position2D"]
+wait_time = 3.0
+one_shot = true
+autostart = true
+
+[node name="Position2D2" type="Position2D" parent="."]
+position = Vector2( 213, 591 )
+script = ExtResource( 6 )
+BOWMAN = ExtResource( 5 )
+PERSON = ExtResource( 2 )
+
+[node name="Timer" type="Timer" parent="Position2D2"]
+wait_time = 1.5
+one_shot = true
+autostart = true
+
+[node name="killzone" type="Area2D" parent="."]
+collision_layer = 0
+script = ExtResource( 7 )
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="killzone"]
+position = Vector2( 186, 589 )
+shape = SubResource( 12 )
+
+[node name="CollisionShape2D2" type="CollisionShape2D" parent="killzone"]
+position = Vector2( 883, 589 )
+shape = SubResource( 12 )
+
+[node name="Label" type="Label" parent="."]
+margin_left = 366.0
+margin_top = 340.0
+margin_right = 699.0
+margin_bottom = 439.0
+text = "-Hold Z: expand your wings (dampens fall)
+-Release Z: Flap wings
+-Grab people and take them to your cave to score points
+-Don't fall too hard or you'll die!
+-Some people have bows! they'll shoot on sight"
+
+[connection signal="body_entered" from="goal_area" to="goal_area" method="_on_goal_area_body_entered"]
+[connection signal="timeout" from="Position2D/Timer" to="Position2D" method="_on_Timer_timeout"]
+[connection signal="timeout" from="Position2D2/Timer" to="Position2D2" method="_on_Timer_timeout"]
+[connection signal="body_entered" from="killzone" to="killzone" method="_on_killzone_body_entered"]

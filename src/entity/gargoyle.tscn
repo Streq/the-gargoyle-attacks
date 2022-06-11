@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=2]
+[gd_scene load_steps=11 format=2]
 
 [ext_resource path="res://src/entity/gargoyle.gd" type="Script" id=1]
 [ext_resource path="res://assets/texture/sheet.png" type="Texture" id=2]
@@ -38,7 +38,8 @@ tracks/0/keys = {
 
 [sub_resource type="Animation" id=3]
 resource_name = "flap"
-length = 0.25
+length = 0.1
+step = 0.125
 tracks/0/type = "value"
 tracks/0/path = NodePath("KinematicBody2D/Sprite:frame")
 tracks/0/interp = 1
@@ -49,7 +50,7 @@ tracks/0/keys = {
 "times": PoolRealArray( 0 ),
 "transitions": PoolRealArray( 1 ),
 "update": 1,
-"values": [ 2 ]
+"values": [ 1 ]
 }
 
 [sub_resource type="Animation" id=4]
@@ -65,6 +66,22 @@ tracks/0/keys = {
 "transitions": PoolRealArray( 1 ),
 "update": 1,
 "values": [ 0 ]
+}
+
+[sub_resource type="Animation" id=8]
+resource_name = "open_wings"
+length = 0.1
+tracks/0/type = "value"
+tracks/0/path = NodePath("KinematicBody2D/Sprite:frame")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/keys = {
+"times": PoolRealArray( 0 ),
+"transitions": PoolRealArray( 1 ),
+"update": 1,
+"values": [ 2 ]
 }
 
 [sub_resource type="Animation" id=6]
@@ -87,9 +104,10 @@ tracks/0/keys = {
 [sub_resource type="RectangleShape2D" id=7]
 extents = Vector2( 3, 1.5 )
 
-[node name="KinematicBody2D" type="KinematicBody2D"]
+[node name="KinematicBody2D" type="KinematicBody2D" groups=["player"]]
 position = Vector2( 33, 77 )
 collision_layer = 3
+collision_mask = 0
 script = ExtResource( 1 )
 gravity = 200.0
 speed = 100.0
@@ -105,15 +123,32 @@ anims/RESET = SubResource( 5 )
 anims/air = SubResource( 2 )
 anims/flap = SubResource( 3 )
 anims/idle = SubResource( 4 )
+anims/open_wings = SubResource( 8 )
 anims/walk = SubResource( 6 )
 
 [node name="Sprite" type="Sprite" parent="."]
 texture = ExtResource( 2 )
 hframes = 8
 vframes = 8
+frame = 2
 
 [node name="grabber_area" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 4
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="grabber_area"]
 position = Vector2( 0, 3.5 )
 shape = SubResource( 7 )
+
+[node name="hold_pos" type="Position2D" parent="."]
+position = Vector2( 0, 8 )
+
+[node name="hurtbox" type="Area2D" parent="."]
+collision_layer = 16
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="hurtbox"]
+shape = SubResource( 1 )
+
+[connection signal="area_entered" from="grabber_area" to="." method="_on_grabber_area_area_entered"]
+[connection signal="area_entered" from="hurtbox" to="." method="_on_hurtbox_area_entered"]

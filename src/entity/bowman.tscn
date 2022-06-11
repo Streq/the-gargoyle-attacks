@@ -1,7 +1,9 @@
-[gd_scene load_steps=10 format=2]
+[gd_scene load_steps=12 format=2]
 
 [ext_resource path="res://assets/texture/sheet.png" type="Texture" id=1]
 [ext_resource path="res://src/entity/person.gd" type="Script" id=2]
+[ext_resource path="res://src/entity/bow.gd" type="Script" id=3]
+[ext_resource path="res://src/entity/arrow.tscn" type="PackedScene" id=4]
 
 [sub_resource type="Animation" id=1]
 length = 0.001
@@ -90,7 +92,7 @@ extents = Vector2( 2, 3.5 )
 [sub_resource type="RectangleShape2D" id=6]
 extents = Vector2( 2, 1.5 )
 
-[node name="person" type="KinematicBody2D"]
+[node name="bowman" type="KinematicBody2D" groups=["person"]]
 collision_layer = 9
 collision_mask = 0
 script = ExtResource( 2 )
@@ -102,7 +104,7 @@ hframes = 8
 vframes = 8
 frame = 8
 
-[node name="AnimationPlayer" type="AnimationPlayer" parent="." groups=["person"]]
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
 anims/RESET = SubResource( 1 )
 anims/air = SubResource( 7 )
 anims/grabbed = SubResource( 2 )
@@ -120,3 +122,18 @@ collision_mask = 0
 [node name="CollisionShape2D" type="CollisionShape2D" parent="grabbable_area"]
 position = Vector2( 0, -2.5 )
 shape = SubResource( 6 )
+
+[node name="bow" type="Node2D" parent="."]
+script = ExtResource( 3 )
+ARROW = ExtResource( 4 )
+
+[node name="Sprite" type="Sprite" parent="bow"]
+position = Vector2( 3, 0 )
+texture = ExtResource( 1 )
+hframes = 8
+vframes = 8
+frame = 12
+
+[node name="cooldown" type="Timer" parent="bow"]
+wait_time = 1.5
+one_shot = true
