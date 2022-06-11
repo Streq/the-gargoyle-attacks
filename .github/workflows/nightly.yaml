@@ -8,11 +8,11 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   GODOT_VERSION: ${{ secrets.GODOT_VERSION }}
   PROJECT_NAME: ${{ secrets.ITCH_PROJECT_NAME }}
-  RELEASE_LINUX: true
-  RELEASE_WINDOWS: true
-  RELEASE_MAC: true
-  RELEASE_HTML5: true
-  UPLOAD_TO_GH_PAGES: true
+  RELEASE_LINUX: ${{ secrets.RELEASE_LINUX }}
+  RELEASE_WINDOWS: ${{ secrets.RELEASE_WINDOWS }}
+  RELEASE_MAC: ${{ secrets.RELEASE_MAC }}
+  RELEASE_HTML5: ${{ secrets.RELEASE_HTML5 }}
+  UPLOAD_TO_GH_PAGES: ${{ secrets.UPLOAD_TO_GH_PAGES }}
 
 jobs:
   BuildAndPublish:
